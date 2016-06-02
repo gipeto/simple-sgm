@@ -30,6 +30,8 @@ namespace sgm
 	class SemiGlobalMatching
 	{
 
+		static_assert(std::is_integral<T>::value, "T must be an integral type");
+
 		template<int cnt, int N>
 		struct Loop
 		{
@@ -73,6 +75,44 @@ namespace sgm
 			}
 
 
+			
+			inline static void EvaluateMinAVX2(T * Lmin, __m256i & GlobalMin, T * Lp, __m256i & P1) noexcept
+			{
+
+				auto _Lp      = _mm256_load_si256(reinterpret_cast<__m256i *>(Lp));
+				auto _Lp_plus = _mm256_lddqu_si256(reinterpret_cast<__m256i *>(Lp+1));
+				
+				GlobalMin = _mm256_min_epu16(GlobalMin, _Lp);
+
+				if (0 == cnt)
+				{
+					auto _min = _mm256_min_epu16(_Lp, _mm256_adds_epu16(_Lp_plus,P1));
+					_mm256_store_si256(reinterpret_cast<__m256i *>(Lmin), _min);
+					Loop<cnt + 1, N>::EvaluateMinAVX2(Lmin+16, GlobalMin, Lp+16, P1);
+					return;
+				}
+
+				auto _Lp_minus = _mm256_lddqu_si256(reinterpret_cast<__m256i *>(Lp - 1));
+
+
+				if (N - 16 == cnt)
+				{
+					auto _min = _mm256_min_epu16(_Lp, _mm256_adds_epu16(_Lp_minus, P1));
+					_mm256_store_si256(reinterpret_cast<__m256i *>(Lmin), _min);
+					Loop<cnt + 1, N>::EvaluateMinAVX2(Lmin + 16, GlobalMin, Lp + 16, P1);
+					return;
+				}
+
+				auto _min = _mm256_min_epu16(_Lp, _mm256_adds_epu16( _mm256_min_epu16(_Lp_minus,_Lp_plus) ,P1) ) ;
+				_mm256_store_si256(reinterpret_cast<__m256i *>(Lmin), _min);
+				Loop<cnt + 1, N>::EvaluateMinAVX2(Lmin + 16, GlobalMin, Lp + 16, P1);
+			
+
+			}
+
+
+
+
 		};
 
 		template<int N>
@@ -86,10 +126,15 @@ namespace sgm
 				return d;
 			}
 
+
+			inline static void EvaluateMinAVX2(T * , __m256i & , T * , __m256i &) noexcept
+			{}
+
 		};
 
 
 		using BufferPtr = typename unique_ptr_aligned<T>;
+		auto static constexpr Alignment = 32;
 
 		BufferPtr C;
 		BufferPtr S;
@@ -119,13 +164,13 @@ namespace sgm
 			Width = Left.Width;
 			Height = Left.Height;
 
-			C = make_unique_aligned<T>(Width*Height*DMax);
-			S = make_unique_aligned<T>(Width*Height*DMax);
-			PathStorage[0] = make_unique_aligned<T>(DMax);
-			PathStorage[1] = make_unique_aligned<T>(Width*DMax);
-			PathStorage[2] = make_unique_aligned<T>(Width*DMax);
-			PathStorage[3] = make_unique_aligned<T>(Width*DMax);
-			min_Lp_r = make_unique_aligned<T>(DMax);
+			C = make_unique_aligned<T,Alignment>(Width*Height*DMax);
+			S = make_unique_aligned<T, Alignment>(Width*Height*DMax);
+			PathStorage[0] = make_unique_aligned<T, Alignment>(DMax);
+			PathStorage[1] = make_unique_aligned<T, Alignment>(Width*DMax);
+			PathStorage[2] = make_unique_aligned<T, Alignment>(Width*DMax);
+			PathStorage[3] = make_unique_aligned<T, Alignment>(Width*DMax);
+			min_Lp_r = make_unique_aligned<T, Alignment>(DMax);
 			initC();
 		}
 
@@ -201,6 +246,29 @@ namespace sgm
 		private:
 
 
+		inline  void EvaluateMinAVX2Proxy(T * Lmin, T & GlobalMin, T * Lp, T P1) noexcept
+		{
+		
+			__m256i _GlobalMin = _mm256_set1_epi16(GlobalMin);
+			__m256i _P1 = _mm256_set1_epi16(P1);
+		
+			Loop<0, DMax /16 >::EvaluateMinAVX2(Lmin, _GlobalMin,  Lp, _P1);
+				
+			T LastMin[16];
+			_mm256_store_si256(reinterpret_cast<__m256i *>(&LastMin), _GlobalMin);
+
+			for (auto & i : LastMin)
+			{
+				if (i < GlobalMin)
+				{
+					GlobalMin = i;
+				}
+			}
+		
+		}
+
+
+
 		template<int P, bool init = false>
 		inline void UpdatePath(T * pS, T * const pC, size_t widx) noexcept
 		{
@@ -223,7 +291,9 @@ namespace sgm
 
 
 			T LGmin = std::numeric_limits<T>::max();
-			Loop<0, DMax>::EvaluateMin(min_Lp_r.get(), LGmin, path_vector, m_P1);
+		//	Loop<0, DMax>::EvaluateMin(min_Lp_r.get(), LGmin, path_vector, m_P1);
+			EvaluateMinAVX2Proxy(min_Lp_r.get(), LGmin, path_vector, m_P1);
+
 
 			for (auto d = 0; d < DMax; d++)
 			{

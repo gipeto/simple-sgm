@@ -8,7 +8,7 @@
 #include "sgm.h"
 
 
-auto static constexpr DMax = 64;
+auto static constexpr DMax = 128;
 
 
 int main()
