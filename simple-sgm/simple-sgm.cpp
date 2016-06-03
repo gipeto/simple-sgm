@@ -8,7 +8,7 @@
 #include "sgm.h"
 
 
-auto static constexpr DMax = 128;
+auto static constexpr DMax = 64;
 
 
 int main()
@@ -31,6 +31,7 @@ int main()
 		 sgm::SemiGlobalMatching<unsigned short, DMax> Sgm(std::move(LeftImage), std::move(RightImage));
 		 Sgm.SetPenalities(5, 30);
 		 DMap = Sgm.GetDisparity();
+		
 	}
 
 	    SaveImage(DMap,Factory, L"DisparityMap.png");
