@@ -13,14 +13,14 @@ namespace sgm
 		return left < right ? left : right;
 	}
 
-
+	 
 	/*
 	  Implementation of the SemiGlobal Matching algorithm [1], with the following limitations:
 
 	  - The matching cost is a simple absolute difference of the pixel luminance
 	  - Only 8 path are considered
 	  - Penality P2 are not weighted by the image gradient
-	  - No consistency checks and disparity sub-pixel interpolation
+	  - No consistency checks
 
 	  [1] Hirschmuller, H. (2005). Accurate and Efficient Stereo Processing by Semi Global Matching and Mutual Information. CVPR .
 
@@ -33,9 +33,9 @@ namespace sgm
 		using T = unsigned short;
 		auto static constexpr DInt = DMax - DMin;
 
-		static_assert (DMin >= 0 && DMax >=0, "DMin and DMax must be positive");
-		static_assert( DMax > DMin, "DMax must be larger than DMin");
-		static_assert( 0 == DMin % 16, "DMin must be a multiple of 16");
+		static_assert (DMin >= 0 && DMax >= 0, "DMin and DMax must be positive");
+		static_assert(DMax > DMin, "DMax must be larger than DMin");
+		static_assert(0 == DMin % 16, "DMin must be a multiple of 16");
 		static_assert (0 == DMax % 16, "DMax must be a multiple of 16");
 
 
@@ -77,6 +77,7 @@ namespace sgm
 					GlobalMin = Lp[cnt];
 				}
 
+
 				return Loop<cnt + 1, N>::GetMinIdx(GlobalMin, Lp, d);
 
 			}
@@ -114,11 +115,7 @@ namespace sgm
 				_mm256_store_si256(reinterpret_cast<__m256i *>(Lmin), _min);
 				Loop<cnt + 1, N>::EvaluateMinAVX2(Lmin + 16, GlobalMin, Lp + 16, P1);
 
-
 			}
-
-
-
 
 		};
 
@@ -132,7 +129,6 @@ namespace sgm
 			{
 				return d;
 			}
-
 
 			inline static void EvaluateMinAVX2(T *, __m256i &, T *, __m256i &) noexcept
 			{}
@@ -161,8 +157,6 @@ namespace sgm
 		T m_P2 = 30;
 
 
-
-
 	public:
 
 
@@ -170,7 +164,6 @@ namespace sgm
 		SemiGlobalMatching(SimpleImage && _Left, SimpleImage && _Right) :
 			Left(std::move(_Left)), Right(std::move(_Right))
 		{
-
 
 			Width = Left.Width;
 			Height = Left.Height;
@@ -202,10 +195,10 @@ namespace sgm
 				for (auto ix = 0; ix < DMin; ix++)
 				{
 					auto iidx = ix + Width*iy;
-					
+
 					for (auto d = 0; d < DInt; d++)
 					{
-						auto idx = d  + iidx * DInt;
+						auto idx = d + iidx * DInt;
 						C[idx] = (1 << 11);
 						ASSERT(idx >= 0 && idx < Width*Height*DInt);
 					}
@@ -214,17 +207,18 @@ namespace sgm
 				for (auto ix = DMin; ix < DMax; ix++)
 				{
 					auto iidx = ix + Width*iy;
-				
-					for (auto d = 0; d < ix; d++)
+
+					for (auto d = DMin; d < ix; d++)
 					{
-						auto idx = d + iidx * DInt;
-						C[idx] = abs(static_cast<short>(Left.Buffer[iidx]) - static_cast<short>(Right.Buffer[iidx - d - DMin]));
+						auto idx = d - DMin + iidx * DInt;
+						C[idx] = abs(static_cast<short>(Left.Buffer[iidx]) - static_cast<short>(Right.Buffer[iidx - d]));
 						ASSERT(idx >= 0 && idx < Width*Height*DInt);
+						ASSERT(iidx - d >= 0 && iidx - d < Width*Height);
 					}
 
-					for (auto d = ix; d < DInt; d++)
+					for (auto d = ix; d < DMax; d++)
 					{
-						auto idx = d + iidx * DInt;
+						auto idx = d - DMin + iidx * DInt;
 						C[idx] = (1 << 11);
 						ASSERT(idx >= 0 && idx < Width*Height*DInt);
 					}
@@ -235,13 +229,14 @@ namespace sgm
 				for (auto ix = DMax; ix < Width; ix++)
 				{
 					auto iidx = ix + Width*iy;
-					 
+
 					for (auto d = 0; d < DInt; d++)
 					{
 						auto idx = d + iidx * DInt;
-						C[idx] = abs(static_cast<short>(Left.Buffer[iidx]) - static_cast<short>(Right.Buffer[iidx - d-DMin]));
+						C[idx] = abs(static_cast<short>(Left.Buffer[iidx]) - static_cast<short>(Right.Buffer[iidx - d - DMin]));
 						ASSERT(idx >= 0 && idx < Width*Height*DInt);
-						
+						ASSERT(iidx - d - DMin >= 0 && iidx - d - DMin < Width*Height);
+
 					}
 				}
 
@@ -253,7 +248,7 @@ namespace sgm
 		SimpleImage GetDisparity()
 		{
 
-			if (InstructionSet::AVX2()&&false)
+			if (InstructionSet::AVX2())
 			{
 				ForwardPass<true>();
 				BackwardPass<true>();
@@ -264,12 +259,27 @@ namespace sgm
 				BackwardPass();
 			}
 
+			auto Disparity = make_unique_aligned<T>(Width*Height);
 			auto Output = make_unique_aligned<BYTE>(Width*Height);
+
+			T MaxDisparity = DMin;
+			T MinDisparity = DMax;
 
 			for (auto i = 0; i < Height*Width; i++)
 			{
-				T MinVal = std::numeric_limits<T>::max();
-				Output[i] = Loop<0, DInt>::GetMinIdx(MinVal, S.get() + i*DInt, 0) * 255 / DInt;
+				auto MinVal = std::numeric_limits<T>::max();
+				auto d = Loop<0, DInt>::GetMinIdx(MinVal, S.get() + i*DInt, 0);
+
+				if (d > MaxDisparity) MaxDisparity = d;
+				if (d < MinDisparity) MinDisparity = d;
+
+				Disparity[i] = d;
+			}
+
+
+			for (auto i = 0; i < Height*Width; i++)
+			{
+				Output[i] = (Disparity[i] - MinDisparity) * 255 / (MaxDisparity - MinDisparity);
 			}
 
 			return{ std::move(Output),Width,Height };
@@ -324,7 +334,6 @@ namespace sgm
 
 			T LGmin = std::numeric_limits<T>::max();
 
-
 			if (WithAVX2)
 			{
 				EvaluateMinAVX2Proxy(min_Lp_r.get(), LGmin, path_vector, m_P1);
@@ -358,11 +367,8 @@ namespace sgm
 
 				}
 
-
 				return;
-
 			}
-
 
 			Loop<0, DInt>::EvaluateMin(min_Lp_r.get(), LGmin, path_vector, m_P1);
 
@@ -372,7 +378,6 @@ namespace sgm
 				pS[d] += path_cost;
 				path_vector[d] = path_cost;
 			}
-
 
 		}
 
@@ -389,7 +394,7 @@ namespace sgm
 			// first line
 			for (auto ix = 1; ix < Width; ix++)
 			{
-				UpdatePath<0, false, WithAVX2>(S.get() + ix*DInt, C.get()+ ix*DInt, ix);
+				UpdatePath<0, false, WithAVX2>(S.get() + ix*DInt, C.get() + ix*DInt, ix);
 				UpdatePath<1, true, WithAVX2>(S.get() + ix*DInt, C.get() + ix*DInt, ix);
 				UpdatePath<2, true, WithAVX2>(S.get() + ix*DInt, C.get() + ix*DInt, ix);
 				UpdatePath<3, true, WithAVX2>(S.get() + ix*DInt, C.get() + ix*DInt, ix);
@@ -401,8 +406,8 @@ namespace sgm
 				// first pixel of the line
 				auto idy = Width*iy;
 
-				UpdatePath<0, true, WithAVX2>(S.get()  + idy*DInt, C.get() + idy*DInt, 0);
-				UpdatePath<1, true, WithAVX2>(S.get()  + idy*DInt, C.get() + idy*DInt, 0);
+				UpdatePath<0, true, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
+				UpdatePath<1, true, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
 				UpdatePath<2, false, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
 				UpdatePath<3, false, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
 
@@ -434,9 +439,9 @@ namespace sgm
 			for (auto ix = 1; ix < Width; ix++)
 			{
 				UpdatePath<0, false, WithAVX2>(S.get() + (last - ix)*DInt, C.get() + (last - ix)*DInt, ix);
-				UpdatePath<1, true, WithAVX2>( S.get() + (last - ix)*DInt, C.get() + (last - ix)*DInt, ix);
-				UpdatePath<2, true, WithAVX2>( S.get() + (last - ix)*DInt, C.get() + (last - ix)*DInt, ix);
-				UpdatePath<3, true, WithAVX2>( S.get() + (last - ix)*DInt, C.get() + (last - ix)*DInt, ix);
+				UpdatePath<1, true, WithAVX2>(S.get() + (last - ix)*DInt, C.get() + (last - ix)*DInt, ix);
+				UpdatePath<2, true, WithAVX2>(S.get() + (last - ix)*DInt, C.get() + (last - ix)*DInt, ix);
+				UpdatePath<3, true, WithAVX2>(S.get() + (last - ix)*DInt, C.get() + (last - ix)*DInt, ix);
 			}
 
 
@@ -445,8 +450,8 @@ namespace sgm
 				// first pixel of the line
 				auto idy = last - Width*iy;
 
-				UpdatePath<0, true, WithAVX2>(S.get()  + idy*DInt, C.get()  + idy*DInt, 0);
-				UpdatePath<1, true, WithAVX2>(S.get()  + idy*DInt, C.get()  + idy*DInt, 0);
+				UpdatePath<0, true, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
+				UpdatePath<1, true, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
 				UpdatePath<2, false, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
 				UpdatePath<3, false, WithAVX2>(S.get() + idy*DInt, C.get() + idy*DInt, 0);
 
