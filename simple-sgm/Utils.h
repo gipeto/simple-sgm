@@ -80,7 +80,7 @@ namespace utils
 	auto make_unique_aligned(size_t n) -> std::enable_if_t<std::is_arithmetic<T>::value,unique_ptr_aligned<T>>
 	{
 		auto p = _aligned_malloc(n*sizeof(T), Alignment);
-		ZeroMemory(+p, n*sizeof(T));
+		ZeroMemory(p, n*sizeof(T));
 		return unique_ptr_aligned<T>(static_cast<T*>(p));
 	}
 
