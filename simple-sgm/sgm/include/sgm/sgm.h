@@ -1,8 +1,7 @@
 #pragma once
 
-#include <sgm/sgm_utils.h>
-
 #include <cassert>
+#include <sgm/sgm_utils.h>
 
 namespace sgm
 {

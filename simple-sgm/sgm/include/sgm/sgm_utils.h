@@ -1,8 +1,11 @@
 #pragma once
 
-#include <cstdlib>
 #include <memory>
 #include <type_traits>
+
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 namespace sgm
 {
@@ -11,7 +14,8 @@ struct aligned_deleter
 {
     void operator()(T* p) const
     {
-        std::free(p);
+        _mm_free(p);
+        p = nullptr;
     }
 };
 
@@ -21,8 +25,14 @@ using unique_ptr_aligned = typename std::unique_ptr<T[], aligned_deleter<T>>;
 template <typename T, size_t Alignment = 16>
 auto make_unique_aligned(size_t n) -> std::enable_if_t<std::is_arithmetic<T>::value, unique_ptr_aligned<T>>
 {
-    auto p = std::aligned_alloc(Alignment, n * sizeof(T));
+    auto p = _mm_malloc(n * sizeof(T), Alignment);
+
+    if (nullptr == p)
+    {
+        throw std::runtime_error("Failed to allocate aligned memory");
+    }
     std::memset(p, 0, n * sizeof(T));
+
     return unique_ptr_aligned<T>(static_cast<T*>(p));
 }
 
