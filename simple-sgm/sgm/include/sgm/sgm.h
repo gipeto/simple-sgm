@@ -213,7 +213,7 @@ public:
         BackwardPass<UseAVX2>();
 
         auto Disparity = make_unique_aligned<T>(Width * Height);
-        auto Output = make_unique_aligned<BYTE>(Width * Height);
+        auto Output = make_unique_aligned<uint8_t>(Width * Height);
 
         T MaxDisparity = DMin;
         T MinDisparity = DMax;

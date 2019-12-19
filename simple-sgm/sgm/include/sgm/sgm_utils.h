@@ -48,12 +48,17 @@ struct SimpleImage
     size_t Width;
     size_t Height;
 
-    bool operator==(const SimpleImage& Other) noexcept
+    bool operator==(const SimpleImage& Other) const  noexcept
     {
         return (Width == Other.Width) && (Height == Other.Height);
     }
 
-    explicit operator bool() noexcept
+     bool operator!=(const SimpleImage& Other) const  noexcept
+     {
+         return !this->operator==(Other);
+     }
+
+    explicit operator bool() const noexcept
     {
         return nullptr != Buffer;
     }
