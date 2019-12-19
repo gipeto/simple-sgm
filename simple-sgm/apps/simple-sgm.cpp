@@ -1,7 +1,4 @@
-// simple-sgm.cpp : Defines the entry point for the console application.
-
 #include "utils.h"
-#include <iostream>
 #include <sgm/sgm.h>
 
 namespace
@@ -26,6 +23,10 @@ int main(int argc, char* argv[])
         return S_OK;
     }
 
+    std::cout << "Left image: " << argv[1] << std::endl;
+    std::cout << "Right image: " << argv[2] << std::endl;
+    std::cout << "Output image path: " << argv[3] << std::endl;
+
     try
     {
         auto LeftImage = utils::io::readImage(argv[1]);
@@ -36,9 +37,21 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Images must have the same dimension");
         }
 
-        sgm::SemiGlobalMatching<DMax, DMin, true> Sgm(std::move(LeftImage), std::move(RightImage));
-        Sgm.SetPenalities(10, 80);
-        const auto DMap = Sgm.GetDisparity();
+        sgm::SimpleImage DMap;
+        if (utils::instructionset::avx2_supported())
+        {
+            utils::perf::PerformanceTimer timer("AVX2 accelerated sgm");
+            sgm::SemiGlobalMatching<DMax, DMin, true> Sgm(std::move(LeftImage), std::move(RightImage));
+            Sgm.SetPenalities(10, 80);
+            DMap = Sgm.GetDisparity();
+        }
+        else
+        {
+            utils::perf::PerformanceTimer timer("Non vectorized sgm");
+            sgm::SemiGlobalMatching<DMax, DMin, false> Sgm(std::move(LeftImage), std::move(RightImage));
+            Sgm.SetPenalities(10, 80);
+            DMap = Sgm.GetDisparity();
+        }
 
         utils::io::saveImage(argv[3], DMap);
 

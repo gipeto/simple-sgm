@@ -10,6 +10,9 @@
 #include <stdexcept>
 #include <string>
 
+#include <chrono>
+#include <iostream>
+
 namespace utils
 {
 namespace instructionset
@@ -84,5 +87,33 @@ void saveImage(std::string filename, const sgm::SimpleImage& image)
 }
 
 }  // namespace io
+
+namespace perf
+{
+class PerformanceTimer
+{
+    std::string m_message;
+    std::chrono::high_resolution_clock::time_point m_start;
+
+public:
+    PerformanceTimer(std::string message)
+          : m_message(std::move(message))
+          , m_start(std::chrono::high_resolution_clock::now())
+    {
+    }
+
+    ~PerformanceTimer()
+    {
+        const auto stop = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> diff = stop - m_start;
+
+        std::cout << std::endl;
+        std::cout << "-------------------------------------------" << std::endl;
+        std::cout << m_message << " did execute in " << 1000. * diff.count() << " ms" << std::endl;
+        std::cout << "-------------------------------------------" << std::endl;
+    }
+};
+
+}  // namespace perf
 
 }  // namespace utils
