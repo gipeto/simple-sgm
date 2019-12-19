@@ -67,7 +67,7 @@ sgm::SimpleImage readImage(std::string filename)
     sgm::SimpleImage image{sgm::make_unique_aligned<uint8_t>(static_cast<size_t>(width * height)),
                            static_cast<size_t>(width), static_cast<size_t>(height)};
 
-    std::memcmp(image.Buffer.get(), pixelData, static_cast<size_t>(width * height));
+    std::memcpy(&image.Buffer.get()[0], pixelData, static_cast<size_t>(width * height));
     stbi_image_free(pixelData);
 
     return image;
