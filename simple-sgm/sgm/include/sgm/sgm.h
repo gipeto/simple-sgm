@@ -2,6 +2,8 @@
 
 #include <sgm/sgm_utils.h>
 
+#include <cassert>
+
 namespace sgm
 {
 /*
@@ -166,7 +168,7 @@ public:
                 {
                     auto idx = d + iidx * DInt;
                     C[idx] = (1 << 11);
-                    ASSERT(idx >= 0 && idx < Width * Height * DInt);
+                    assert(idx >= 0 && idx < Width * Height * DInt);
                 }
             }
 
@@ -178,15 +180,15 @@ public:
                 {
                     auto idx = d - DMin + iidx * DInt;
                     C[idx] = abs(static_cast<short>(Left.Buffer[iidx]) - static_cast<short>(Right.Buffer[iidx - d]));
-                    ASSERT(idx >= 0 && idx < Width * Height * DInt);
-                    ASSERT(iidx - d >= 0 && iidx - d < Width * Height);
+                    assert(idx >= 0 && idx < Width * Height * DInt);
+                    assert(iidx - d >= 0 && iidx - d < Width * Height);
                 }
 
                 for (auto d = ix; d < DMax; d++)
                 {
                     auto idx = d - DMin + iidx * DInt;
                     C[idx] = (1 << 11);
-                    ASSERT(idx >= 0 && idx < Width * Height * DInt);
+                    assert(idx >= 0 && idx < Width * Height * DInt);
                 }
             }
 
@@ -199,8 +201,8 @@ public:
                     auto idx = d + iidx * DInt;
                     C[idx] =
                         abs(static_cast<short>(Left.Buffer[iidx]) - static_cast<short>(Right.Buffer[iidx - d - DMin]));
-                    ASSERT(idx >= 0 && idx < Width * Height * DInt);
-                    ASSERT(iidx - d - DMin >= 0 && iidx - d - DMin < Width * Height);
+                    assert(idx >= 0 && idx < Width * Height * DInt);
+                    assert(iidx - d - DMin >= 0 && iidx - d - DMin < Width * Height);
                 }
             }
         }
