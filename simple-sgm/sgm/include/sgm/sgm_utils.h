@@ -5,6 +5,10 @@
 
 #if defined(_MSC_VER)
 #include <intrin.h>
+#define __avx2_dispatch
+#else
+#include <immintrin.h>
+#define __avx2_dispatch __attribute__((__target__("avx2")))
 #endif
 
 namespace sgm
@@ -48,15 +52,15 @@ struct SimpleImage
     size_t Width;
     size_t Height;
 
-    bool operator==(const SimpleImage& Other) const  noexcept
+    bool operator==(const SimpleImage& Other) const noexcept
     {
         return (Width == Other.Width) && (Height == Other.Height);
     }
 
-     bool operator!=(const SimpleImage& Other) const  noexcept
-     {
-         return !this->operator==(Other);
-     }
+    bool operator!=(const SimpleImage& Other) const noexcept
+    {
+        return !this->operator==(Other);
+    }
 
     explicit operator bool() const noexcept
     {

@@ -64,7 +64,7 @@ class SemiGlobalMatching
             return Loop<cnt + 1, N>::GetMinIdx(GlobalMin, Lp, d);
         }
 
-        inline static void EvaluateMinAVX2(T* Lmin, __m256i& GlobalMin, T* Lp, __m256i& P1) noexcept
+        __avx2_dispatch inline static void EvaluateMinAVX2(T* Lmin, __m256i& GlobalMin, T* Lp, __m256i& P1) noexcept
         {
             auto _Lp = _mm256_load_si256(reinterpret_cast<__m256i*>(Lp));
             auto _Lp_plus = _mm256_lddqu_si256(reinterpret_cast<__m256i*>(Lp + 1));
@@ -107,12 +107,12 @@ class SemiGlobalMatching
             return d;
         }
 
-        inline static void EvaluateMinAVX2(T*, __m256i&, T*, __m256i&) noexcept
+        __avx2_dispatch inline static void EvaluateMinAVX2(T*, __m256i&, T*, __m256i&) noexcept
         {
         }
     };
 
-    using BufferPtr = typename unique_ptr_aligned<T>;
+    using BufferPtr = unique_ptr_aligned<T>;
     auto static constexpr Alignment = 32;
 
     BufferPtr C;
@@ -240,14 +240,14 @@ public:
     }
 
 private:
-    inline void EvaluateMinAVX2Proxy(T* Lmin, T& GlobalMin, T* Lp, T P1) noexcept
+    __avx2_dispatch inline void EvaluateMinAVX2Proxy(T* Lmin, T& GlobalMin, T* Lp, T P1) noexcept
     {
         __m256i _GlobalMin = _mm256_set1_epi16(GlobalMin);
         __m256i _P1 = _mm256_set1_epi16(P1);
 
         Loop<0, (DInt >> 4)>::EvaluateMinAVX2(Lmin, _GlobalMin, Lp, _P1);
 
-        __declspec(align(32)) T LastMin[16];
+        alignas(32) T LastMin[16];
         _mm256_store_si256(reinterpret_cast<__m256i*>(&LastMin), _GlobalMin);
 
         for (auto& i : LastMin)
@@ -260,7 +260,7 @@ private:
     }
 
     template <int P, bool init, bool WithAVX2>
-    inline void UpdatePath(T* pS, T* const pC, size_t widx) noexcept
+    __avx2_dispatch inline void UpdatePath(T* pS, T* const pC, size_t widx) noexcept
     {
         auto pshift = (0 == P) ? 0 : widx * DInt;
         auto path_vector = PathStorage[P].get() + pshift;
